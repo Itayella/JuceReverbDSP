@@ -11,17 +11,24 @@
 
 //==============================================================================
 ReverbAudioProcessor::ReverbAudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
-#endif
+
+: myValueTreeState(*this, nullptr, juce::Identifier("myParameter"),
+        {
+    std::make_unique<juce::AudioParameterFloat>("size", "Size", 0.0f, 1.0f, 0.5f),
+    std::make_unique<juce::AudioParameterFloat>("dump", "Dump", 0.0f, 1.0f, 0.5f),
+    std::make_unique<juce::AudioParameterFloat>("width", "Width", 0.0f, 1.0f, 0.5f),
+    std::make_unique<juce::AudioParameterFloat>("mix", "Mix", 0.0f, 1.0f, 0.5f),
+    std::make_unique<juce::AudioParameterBool>("freeze", "Freeze", false)
+    
+    
+})
 {
+    sizePtr = dynamic_cast<juce::AudioParameterFloat*>(myValueTreeState.getParameter("size"));
+    dampPtr = dynamic_cast<juce::AudioParameterFloat*>(myValueTreeState.getParameter("dump"));
+    widthPtr = dynamic_cast<juce::AudioParameterFloat*>(myValueTreeState.getParameter("width"));
+    mixPtr = dynamic_cast<juce::AudioParameterFloat*>(myValueTreeState.getParameter("mix"));
+    freezePtr = dynamic_cast<juce::AudioParameterBool*>(myValueTreeState.getParameter("freeze"));
+        
 }
 
 ReverbAudioProcessor::~ReverbAudioProcessor()
@@ -68,8 +75,8 @@ double ReverbAudioProcessor::getTailLengthSeconds() const
 
 int ReverbAudioProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1;
+    
 }
 
 int ReverbAudioProcessor::getCurrentProgram()
@@ -94,11 +101,12 @@ void ReverbAudioProcessor::changeProgramName (int index, const juce::String& new
 void ReverbAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     mySpec.sampleRate = sampleRate;
-    mySpec.maximumBlockSize = samplesPerBlock;
-    mySpec.numChannels = getTotalNumOutputChannels();
+    mySpec.maximumBlockSize = static_cast<juce::uint32> (samplesPerBlock);
+    mySpec.numChannels = static_cast<juce::uint32> (getTotalNumOutputChannels());
+    
     
     myReverb.prepare(mySpec);
-    myReverb.reset();
+    //myReverb.reset();
     
 }
 
@@ -134,17 +142,30 @@ bool ReverbAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 }
 #endif
 
+
 void ReverbAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-  //  auto totalNumInputChannels  = getTotalNumInputChannels();
-    //auto totalNumOutputChannels = getTotalNumOutputChannels();
 
+   // get blocksize via the dsp::AudioBlock:
     auto myBlock = juce::dsp::AudioBlock<float>(buffer);
+    
+    //replace buffer context:
     auto myContext = juce::dsp::ProcessContextReplacing<float>(myBlock);
-    myReverb.getParameters();
+    
+    //Reverb Process for context replace:
     myReverb.process(myContext);
     
+    
+    //Set Reverb Params though the juce::Reverb::Parameters class:
+    params.roomSize   = sizePtr->get(); //* 0.01f;
+    params.damping    = dampPtr->get(); // * 0.01f;
+    params.width      = widthPtr->get(); //* 0.01f;
+    params.wetLevel   = mixPtr->get(); //* 0.01f;
+    params.dryLevel   = 1.0f - mixPtr->get(); // * 0.01f;
+    params.freezeMode = freezePtr->get();
+    //Update param state:
+    myReverb.setParameters (params);
 }
 
 //==============================================================================
@@ -155,7 +176,11 @@ bool ReverbAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* ReverbAudioProcessor::createEditor()
 {
-    return new ReverbAudioProcessorEditor (*this);
+   // return new ReverbAudioProcessorEditor (*this);
+    
+    //Setup a generic GUI:
+    return new juce::GenericAudioProcessorEditor (*this);
+    
 }
 
 //==============================================================================

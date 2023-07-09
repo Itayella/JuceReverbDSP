@@ -56,9 +56,26 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioProcessorValueTreeState& getPluginState();
+  
+    
+    
 private:
+    
+    juce::AudioProcessorValueTreeState myValueTreeState;
+
+       juce::AudioParameterFloat* sizePtr;
+       juce::AudioParameterFloat* dampPtr;
+       juce::AudioParameterFloat* widthPtr;
+       juce::AudioParameterFloat* mixPtr;
+       juce::AudioParameterBool* freezePtr;
+    
+    void updateReverbParams();
+    
     juce::dsp::ProcessSpec mySpec;
     juce::dsp::Reverb myReverb;
+    juce::dsp::Reverb::Parameters params;
+
 
 
     //==============================================================================
